@@ -22,7 +22,7 @@ app.use(cors());
 
 const io = require('socket.io')(http, {
   cors: {
-    origin: 'http://213.32.89.28:3000',
+    origin: 'http://213.32.89.28',
     methods: ['GET', 'POST'],
   },
 });
@@ -68,3 +68,4 @@ io.on('connection', (socket) => {
 http.listen(5000, () => {
   console.log('listening on *:5000');
 });
+ 
