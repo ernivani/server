@@ -22,7 +22,7 @@ app.use(cors());
 
 const io = require('socket.io')(http, {
   cors: {
-    origin: 'http://213.32.89.28',
+    origin: 'http://127.0.0.1:5173',
     methods: ['GET', 'POST'],
   },
 });
