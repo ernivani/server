@@ -29,7 +29,7 @@ const io = require('socket.io')(http, {
 
 io.on('connection', (socket) => {
 
-  const sql = 'SELECT * FROM messages ORDER BY timestamp DESC LIMIT 10';
+  const sql = 'SELECT * FROM messages ORDER BY timestamp DESC LIMIT 20';
   db.query(sql, (err, rows) => {
     if (err) {
       console.error('Error retrieving messages from database: ', err);
