@@ -42,6 +42,16 @@ io.on('connection', (socket) => {
       timestamp: row.timestamp.toISOString().slice(0, 19).replace('T', ' '),
     }));
     socket.emit('history', messages);
+
+    // create a sever list item
+    const serverList = new Array();
+    // id = 0 name = server
+    serverList.push({id: 0, name: 'Server'});
+    
+    // get all users from database
+
+    socket.emit('channels', serverList);
+
   });
 
   socket.on('message', (message) => {
@@ -61,9 +71,16 @@ io.on('connection', (socket) => {
     });
   });
 
+  
+  
+
   socket.on('disconnect', () => {
+    console.log('user disconnected');
   });
+
+
 });
+
 
 http.listen(5000, () => {
   console.log('listening on *:5000');
