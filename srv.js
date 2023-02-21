@@ -175,7 +175,6 @@ io.on('connection', (socket) => {
                     id: row.id,
                     name: row.server_name,
                 }));
-                console.log(serverList);
                 socket.emit('getServer', {status: 'success', message: 'Server list', serverList: serverList});
             });
         }
