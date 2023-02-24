@@ -3,6 +3,7 @@ const db = require('./db');
 const { md5 } = require('./utils');
 const { login, register } = require('./user');
 const { verifyToken } = require('./auth');
+const { forgetPassword } = require('./forgetPassword');
 
 io.on('connection', (socket) => {
   console.log(`Socket ${socket.id} connected.`);
