@@ -6,7 +6,7 @@ const crypto = require('crypto');
 
 const jwt = require('jsonwebtoken');
 
-const SECRET_KEY = 'ernicani'
+const SECRET_KEY = '8a32260b2cafd22751e83ee944214035';
 
 const mysql = require('mysql');
 const cookieParser = require('cookie-parser');
@@ -32,6 +32,7 @@ function md5(password) {
   md5.update(password);
   return md5.digest('hex');
 }
+
 
 io.on('connection', (socket) => {
   console.log(`Socket ${socket.id} connected.`);
