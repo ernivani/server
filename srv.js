@@ -137,6 +137,86 @@ io.on('connection', (socket) => {
   });
 
 
+  socket.on('getServer', (token) => {
+    console.log(`Socket ${socket.id} sent a getServer request.`);
+    console.log(token);
+    try {
+      const payload = jwt.verify(token, SECRET_KEY);
+      const userId = payload.id;
+
+      const sql = 'SELECT * FROM user WHERE id = ?';
+      db.query(sql, [userId], (err, rows) => {
+        if (err) {
+          console.error('Error retrieving user from database: ', err);
+          socket.emit('getServerResponse', { status: 'error', message: 'Database error.' });
+          return;
+        }
+        if (rows.length === 0) {
+          socket.emit('getServerResponse', { status: 'error', message: 'Invalid token.' });
+        } else {
+          const sql = 'SELECT * FROM server join members on server.id = members.server_id WHERE members.member_name = ?';
+          db.query(sql, [rows[0].id], (err, rows) => {
+            if (err) {
+              console.error('Error retrieving user from database: ', err);
+              socket.emit('getServerResponse', { status: 'error', message: 'Database error.' });
+              return;
+            }
+            if (rows.length === 0) {
+              socket.emit('getServerResponse', { status: 'error', message: 'No server found.', server: rows });
+            } else {
+              socket.emit('getServerResponse', { status: 'success', server: rows });
+            }
+          });
+        }
+      });
+    } catch (err) {
+      socket.emit('getServerResponse', { status: 'error', message: 'Invalid token.' });
+    }
+  });
+
+  socket.on('deleteServer', (data) => {
+    console.log(`Socket ${socket.id} sent a deleteServer request.`);
+    const token = data.token;
+    const serverId = data.serverId;
+    try {
+      const payload = jwt.verify(token, SECRET_KEY);
+      const userId = payload.id;
+
+      const sql = 'SELECT * FROM user WHERE id = ?';
+      db.query(sql, [userId], (err, rows) => {
+        if (err) {
+          console.error('Error retrieving user from database: ', err);
+          socket.emit('deleteServerResponse', { status: 'error', message: 'Database error.' });
+          return;
+        }
+        if (rows.length === 0) {
+          socket.emit('deleteServerResponse', { status: 'error', message: 'Invalid token.' });
+        } else {
+          const sql = 'DELETE FROM server WHERE id = ? AND owner_id = ?';
+          db.query(sql, [serverId,userId], (err, rows) => {
+            if (err) {
+              console.error('Error retrieving user from database: ', err);
+              socket.emit('deleteServerResponse', { status: 'error', message: 'Database error.' });
+              return;
+            }
+            if (rows.length === 0) {
+              socket.emit('deleteServerResponse', { status: 'error', message: 'Invalid token.' });
+            } else {
+              socket.emit('deleteServerResponse', { status: 'success' });
+            }
+          });
+        }
+      });
+    } catch (err) {
+      socket.emit('deleteServerResponse', { status: 'error', message: 'Invalid token.' });
+    }
+  });
+
+
+            
+    
+
+
 
 
 
