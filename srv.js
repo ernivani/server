@@ -4,7 +4,12 @@ const cors = require('cors');
 const http = require('http').createServer(app);
 const crypto = require('crypto');
 
+const jwt = require('jsonwebtoken');
+
+const SECRET_KEY = 'ernicani'
+
 const mysql = require('mysql');
+const cookieParser = require('cookie-parser');
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'chatuser',
@@ -12,29 +17,8 @@ const db = mysql.createConnection({
   database: 'chatdb'
 });
 
-function md5(password) {
-  let md5 = crypto.createHash('md5');
-  md5.update(password);
-  return md5.digest('hex');
-}
 
-
-// genereate a random token
-function generateToken() {
-  return crypto.randomBytes(20).toString('hex');
-}
-
-
-db.connect((err) => {
-  if (err) {
-    console.error('Error connecting to MySQL database: ', err);
-    return;
-  }else {
-    console.log('Connected to MySQL database');
-  }
-});
-
-app.use(cors());
+app.use(cors(), cookieParser());
 
 const io = require('socket.io')(http, {
   cors: {
@@ -43,202 +27,129 @@ const io = require('socket.io')(http, {
   },
 });
 
+function md5(password) {
+  let md5 = crypto.createHash('md5');
+  md5.update(password);
+  return md5.digest('hex');
+}
+
 io.on('connection', (socket) => {
+  console.log(`Socket ${socket.id} connected.`);
 
-  const sql = 'SELECT * FROM messages ORDER BY date_message DESC LIMIT 20';
-  db.query(sql, (err, rows) => {
-    if (err) {
-      console.error('Error retrieving messages from database: ', err);
-      return;
-    }
-    const messages = rows.reverse().map((row) => ({
-      id: row.id,
-      username: row.username,
-      text: row.text,
-      timestamp: row.timestamp.toISOString().slice(0, 19).replace('T', ' '),
-    }));
-    socket.emit('history', messages);
-    console.log('client logged in');
-  });
+  socket.on('login', (data) => {
+    console.log(`Socket ${socket.id} sent a login request.`);
 
-  socket.on('message', (message) => {
+    // mettre dans une const le mail
+    const email = data.email;
+    // mettre dans une const le password encoder avec la fonction md5
+    const password = md5(data.password);
 
-    const { username, text, timestamp } = message;
 
-    const sql = 'INSERT INTO messages (username, text, timestamp) VALUES (?, ?, ?)';
+    // faire une requete sql pour verifier si le mail et le password sont correct
+    // si oui, on envoie un message de succes
 
-    const values = [username, text, timestamp];
-    db.query(sql, values, (err, result) => {
-      if (err) {
-        console.error('Error inserting message into database: ', err);
-        return;
-      }
-      message.id = result.insertId;
-      socket.broadcast.emit('message', message);
-    });
-  });
-
-  socket.on('login', (user) => {
-    const { email, password } = user;
-    
     const sql = 'SELECT * FROM user WHERE user_email = ? AND user_password = ?';
-    const values = [email, md5(password)];
-    db.query(sql, values, (err, rows) => {
-      // if we connect then create a token and send it back to the client
+    db.query(sql, [email, password], (err, rows) => {
       if (err) {
-        console.error('Error retrieving user from database: ', err);
+        console.error('Error retrieving messages from database: ', err);
         return;
       }
-      if (rows.length === 0) {
-        socket.emit('login', {status: 'error', message: 'Invalid username or password'});
-        console.log('Invalid username or password');
-      } else {
-        // create a token
-        const token = generateToken();
-        // update the token in the database
-        const sql = 'INSERT INTO user_token(token,user_id) VALUES (?, ?)';
-        const values = [token, rows[0].id];
-        db.query(sql, values, (err, result) => {
-          if (err) {
-            console.error('Error updating token in database: ', err);
-            return;
-          }
-          socket.emit('login', {status: 'success',message: 'Login successful', token: token, username: rows[0].username});
-        });
+      if (rows.length > 0) {
+        //todo: on envoie un message de succes et on envoie le token grace a jwt auth et on envoie le token dans le cookie en httpOnly
+        const user = rows[0];
+        const token = jwt.sign({ id: user.id }, SECRET_KEY, { expiresIn: '30d' });
+        socket.emit('loginResponse', { status: 'success', token: token });
+        console.log(token);
+      } 
+      else {
+        // on envoie un message d'erreur
+        socket.emit('loginResponse', { status: 'error', message: 'Invalid email or password.' });
       }
+
     });
+      
+  });
+
     
+  socket.on('auth', (token) => {
+    try {
+      const payload = jwt.verify(token, SECRET_KEY);
+      const userId = payload.id;
 
-
-    //   if (err) {
-    //     console.error('Error retrieving users from database: ', err);
-    //     return;
-    //   }
-    //   if (rows.length === 0) {
-    //     socket.emit('login', {status: 'error', message: 'Invalid username or password'});
-    //     console.log('Invalid username or password');
-    //   } else {
-    //     socket.emit('login', {status: 'success',message: 'Login successful', token: rows[0].token, username: rows[0].username});
-    //   }
-    // });
-  });
-  
-  socket.on('register', (user) => {
-    const { email, username, password } = user;
-    const token = generateToken();
-
-    // verify if user already exists
-    let sql = 'SELECT * FROM user WHERE email = ?';
-    let values = [email];
-
-
-    db.query(sql, values, (err, rows) => {
+      const sql = 'SELECT * FROM user WHERE id = ?';
+      db.query(sql, [userId], (err, rows) => {
         if (err) {
-            console.error('Error retrieving user from database: ', err);
-            return;
-        }
-        if (rows.length > 0) {
-            socket.emit('register', {status: 'error', message: 'Email already exists'});
-        } else {
-            sql = 'INSERT INTO user (email, username, password, token) VALUES (?, ?, ?, ?)';
-            values = [email,username,md5(password),token];
-            db.query(sql, values, (err, result) => {
-                if (err) {
-                    console.error('Error inserting user into database: ', err);
-                    return;
-                }
-                socket.emit('register', {status: 'success', message: 'Registration successful', token: token});
-            });
-        }
-    });
-  });
-
-  socket.on('getServer', (server) => {
-
-    const token = server;
-
-// optimised code : 
-    db.query('select * from user_token where token = ?', [token], (err, rows) => {
-        if (err) {
-            console.error('Error retrieving user from database: ', err);
-            return;
+          console.error('Error retrieving user from database: ', err);
+          socket.emit('authResponse', { status: 'error', message: 'Database error.' });
+          return;
         }
         if (rows.length === 0) {
-          socket.emit('getServer', {status: 'error', message: 'Invalid id'});
+          socket.emit('authResponse', { status: 'error', message: 'Invalid token.' });
         } else {
-            db.query('select server_name,server.id from server inner join members on server.id = members.server_id where members.member_name = ?', [rows[0].user_id], (err, rows) => {
-                if (err) {
-                    console.error('Error retrieving server from database: ', err);
-                    return;
-                }
-                const serverList = rows.map((row) => ({
-                    id: row.id,
-                    name: row.server_name,
-                }));
-                socket.emit('getServer', {status: 'success', message: 'Server list', serverList: serverList});
-            });
+          socket.emit('authResponse', { status: 'success' });
         }
+        });
+      } catch (err) {
+        socket.emit('authResponse', { status: 'error', message: 'Invalid token.' });
+      }
     });
-  });
+
+    socket.on('logout', () => {
+      socket.emit('logoutResponse', { status: 'success' });
+    });
 
 
+  socket.on('register', (data) => {
+    console.log(`Socket ${socket.id} sent a register request.`);
+    const email = data.email;
+    const username = data.username;
+    const password = md5(data.password);
 
-
-  socket.on('createServer', (server) => {
-    const { name, token } = server;
-
-    // insert into server (server_name,owner_id,member_id) values ("test",(SELECT id FROM user WHERE user_name = 'ernicani'),(SELECT id from user where user_name = 'ernicani'));
-    let sql = 'SELECT user_id FROM user_token WHERE token = ?'
-
-    db.query(sql, [token], (err, rows) => {
-      if (err) {
-        console.error('Error retrieving user from database: ', err);
+    // Check if the email is already registered
+    const checkEmailSql = 'SELECT * FROM user WHERE user_email = ?';
+    db.query(checkEmailSql, [email], (checkEmailErr, checkEmailRows) => {
+      if (checkEmailErr) {
+        console.error('Error retrieving user from database: ', checkEmailErr);
+        socket.emit('registerResponse', { status: 'error', message: 'Database error.' });
         return;
       }
-      if (rows.length === 0) {
-        socket.emit('createServer', {status: 'error', message: 'Invalid id'});
-      } else {
-        let id = rows[0].user_id;
-        sql = 'INSERT INTO server (server_name,owner_id,member_id) VALUES (?, ?, ?)';
-        let values = [name,id,id];
-
-        db.query(sql, values, (err, result) => {
-          if (err) {
-            console.error('Error inserting server into database: ', err);
-            return;
-          }else {
-            sql = 'INSERT INTO members (member_name,server_id) VALUES (?,?)';
-            values = [id,result.insertId];
-            db.query(sql, values, (err, result) => {
-              if (err) {
-                console.error('Error inserting server into database: ', err);
-                return;
-              }
-              socket.emit('createServer', {status: 'success', message: 'Server created'});
-            });
-          }
-          
-        });
+      if (checkEmailRows.length > 0) {
+        // Email already registered
+        socket.emit('registerResponse', { status: 'error', message: 'Email already registered.' });
+        return;
       }
+      // Email not registered, create a new user
+      const createUserSql = 'INSERT INTO user (user_email, user_password, user_name) VALUES (?, ?, ?)';
+      db.query(createUserSql, [email, password, username], (createUserErr, createUserRows) => {
+        if (createUserErr) {
+          console.error('Error creating user in database: ', createUserErr);
+          socket.emit('registerResponse', { status: 'error', message: 'Database error.' });
+          return;
+        }
+
+        // User created successfully, send success response
+        const token = jwt.sign({ id: createUserRows.insertId }, SECRET_KEY, { expiresIn: '30d' });
+        socket.emit('registerResponse', { status: 'success', token: token });
+        console.log(`User registered successfully with ID ${createUserRows.insertId}.`);
+      });
     });
-
   });
 
-  socket.on('getChannel', (channel) => {
-    const { serverId, token } = channel;
-    console.log(channel);
-  });
-  
+
+
+
 
   socket.on('disconnect', () => {
-    console.log('user disconnected');
+    console.log(`Socket ${socket.id} disconnected.`);
   });
-
-
 });
 
 
-http.listen(5000, () => {
-  console.log('listening on *:5000');
+
+
+
+// Start the server
+const PORT = process.env.PORT || 5000;
+http.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}.`);
 });
- 
