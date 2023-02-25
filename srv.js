@@ -18,8 +18,9 @@ function addLogEntry(method, url, status, responseTime) {
     url,
     status,
     responseTime,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
   };
+
   logs.push(logEntry);
   console.log(logEntry);
 }
