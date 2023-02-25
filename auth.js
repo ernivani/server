@@ -17,7 +17,7 @@ function verifyToken(token) {
 
 function closeToken(token) {
   try {
-    return jwt.close(token, process.env.SECRET_KEY);
+    return jwt.verify(token, process.env.SECRET_KEY);
   } catch (err) {
     return null;
   }

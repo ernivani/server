@@ -69,18 +69,35 @@ io.on('connection', (socket) => {
   });
 
   socket.on('logout', (data) => {
-    const start = Date.now();
+    const token = data;
     logWithTime(`Socket ${socket.id} sent a logout request.`);
-    try {
-      const token = closeToken(token);
-      addLogEntry('Socket', '/logout', 200, Date.now() - start);
-      socket.emit('logoutResponse', { status: 'success', token: token });
+    logWithTime(`Token: ${token}`);
+    console.log(closeToken(token));
+    const start = Date.now();
+    const payload = verifyToken(token);
+    if (payload) {
+      const userId = payload.id;
+      const sql = 'SELECT * FROM user WHERE id = ?';
+      db.query(sql, [userId], (err, rows) => {
+        if (err) {
+          console.error('Error retrieving user from database: ', err);
+          addLogEntry('Socket', '/logout', 500, Date.now() - start);
+          socket.emit('logoutResponse', { status: 'error', message: 'Database error.' });
+          return;
+        }
+        if (rows.length === 0) {
+          addLogEntry('Socket', '/logout', 401, Date.now() - start);
+          socket.emit('logoutResponse', { status: 'error', message: 'Invalid token.' });
+        } else {
+          closeToken(token);
+          addLogEntry('Socket', '/logout', 200, Date.now() - start);
+          socket.emit('logoutResponse', { status: 'success' });
+        }
+      });
+    } else {
+      addLogEntry('Socket', '/logout', 401, Date.now() - start);
+      socket.emit('logoutResponse', { status: 'error', message: 'Invalid token.' });
     }
-    catch (err) {
-      addLogEntry('Socket', '/logout', 500, Date.now() - start);
-      socket.emit('logoutResponse', { status: 'error', message: err.message });
-    }
-
   });
 
   socket.on('register', async (data) => {
@@ -96,7 +113,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('getServer', (token) => {
+  socket.on('getServerList', (token) => {
     logWithTime(`Socket ${socket.id} sent a getServer request.`);
     const start = Date.now();
     const payload = verifyToken(token);
@@ -107,27 +124,27 @@ io.on('connection', (socket) => {
         if (err) {
           console.error('Error retrieving user from database: ', err);
           addLogEntry('Socket', '/getServer', 500, Date.now() - start);
-          socket.emit('getServerResponse', { status: 'error', message: 'Database error.' });
+          socket.emit('getServerListResponse', { status: 'error', message: 'Database error.' });
           return;
         }
         if (rows.length === 0) {
           addLogEntry('Socket', '/getServer', 401, Date.now() - start);
-          socket.emit('getServerResponse', { status: 'error', message: 'Invalid token.' });
+          socket.emit('getServerListResponse', { status: 'error', message: 'Invalid token.' });
         } else {
           const sql = 'SELECT * FROM server join members on server.id = members.server_id WHERE members.member_name = ?';
           db.query(sql, [rows[0].id], (err, rows) => {
             if (err) {
               console.error('Error retrieving user from database: ', err);
               addLogEntry('Socket', '/getServer', 500, Date.now() - start);
-              socket.emit('getServerResponse', { status: 'error', message: 'Database error.' });
+              socket.emit('getServerListResponse', { status: 'error', message: 'Database error.' });
               return;
             }
             if (rows.length === 0) {
-              addLogEntry('Socket', '/getServer', 200, Date.now() - start);
-              socket.emit('getServerResponse', { status: 'error', message: 'No server found.', server: rows })
+              addLogEntry('Socket', '/getServer', 401, Date.now() - start);
+              socket.emit('getServerListResponse', { status: 'error', message: 'No server found.', server: rows })
             } else {
               addLogEntry('Socket', '/getServer', 200, Date.now() - start);
-              socket.emit('getServerResponse', { status: 'success', server: rows })
+              socket.emit('getServerListResponse', { status: 'success', server: rows })
               }
             });
         }
@@ -137,6 +154,11 @@ io.on('connection', (socket) => {
       socket.emit('getServerResponse', { status: 'error', message: 'Invalid token.' });
       }
     });
+
+
+
+    // socket.emit('serverListUpdate', { status: 'success', server: rows });
+
 
     socket.on('getLogs', (token) => {
       logWithTime(`Socket ${socket.id} sent a getLogs request.`);
