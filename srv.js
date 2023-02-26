@@ -14,13 +14,15 @@ const { socketAuth } = require('./sockets/socket-auth');
 
 io.on('connection', (socket) => {
   logWithTime(`Socket ${socket.id} connected.`);
+
+
   socket.on('login', async (data) => {
     logWithTime(`Socket ${socket.id} sent a login request.`);
     const start = Date.now();
     try {
-      const token = await login(data.email, data.password);
+      const {token,username} = await login(data.email, data.password);      
       addLogEntry('Socket', '/login', 200, Date.now() - start);
-      socket.emit('loginResponse', { status: 'success', token: token });
+      socket.emit('loginResponse', { status: 'success', token: token, username: username });
     } catch (err) {        
       addLogEntry('Socket', '/login', 500, Date.now() - start);
       socket.emit('loginResponse', { status: 'error', message: err.message });
@@ -45,7 +47,6 @@ io.on('connection', (socket) => {
     const token = data;
     logWithTime(`Socket ${socket.id} sent a logout request.`);
     logWithTime(`Token: ${token}`);
-    console.log(closeToken(token));
     const start = Date.now();
     const payload = verifyToken(token);
     if (payload) {
@@ -125,6 +126,55 @@ io.on('connection', (socket) => {
     } else {
       addLogEntry('Socket', '/getServer', 401, Date.now() - start);
       socket.emit('getServerResponse', { status: 'error', message: 'Invalid token.' });
+      }
+    });
+
+  socket.on('message', (message) => {
+    const { text, timestamp } = message;
+    
+    
+    const sql = 'INSERT INTO messages (id_user, content, date_message) VALUES (1, ?, ?)';
+
+    const values = [ text, timestamp];
+    db.query(sql, values, (err, result) => {
+      if (err) {
+        console.error('Error inserting message into database: ', err);
+        return;
+      }
+      message.id = result.insertId;
+      socket.broadcast.emit('message', message);
+    });
+    });
+
+    socket.on('history', (data) => {
+      logWithTime(`Socket ${socket.id} sent a history.`);
+      const start = Date.now();
+      const payload = verifyToken(data);
+      if (payload) {
+        const sql = 'SELECT * FROM messages ORDER BY date_message DESC LIMIT 20';
+        db.query(sql, (err, rows) => {
+          if (err) {
+            console.error('Error retrieving messages from database: ', err);
+            return;
+          }
+          else if (rows.length === 0) {
+            logWithTime('No messages in database.');
+            return;
+          }
+          
+          
+          const messages = rows.reverse().map((row) => (
+            {
+            id: row.id,
+            username: row.id_user,
+            text: row.content,
+            timestamp: new Date(row.date_message).toISOString().slice(0, 19).replace('T', ' ')
+          }));
+          logWithTime('messages sent to client');
+          socket.emit('historyResponse', {status: 'success', a: messages});
+        });
+      } else {
+        logWithTime('Invalid token.');
       }
     });
 

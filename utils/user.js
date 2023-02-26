@@ -2,6 +2,7 @@ const db = require('./db');
 const { generateToken } = require('./auth');
 const { md5 } = require('./utils');
 
+
 function login(email, password) {
   return new Promise((resolve, reject) => {
     const sql = 'SELECT * FROM user WHERE user_email = ? AND user_password = ?';
@@ -13,7 +14,7 @@ function login(email, password) {
       if (rows.length > 0) {
         const user = rows[0];
         const token = generateToken(user.id);
-        resolve(token);
+        resolve({token, username: user.user_name});
       } else {
         reject(new Error('Invalid email or password.'));
       }
@@ -40,7 +41,7 @@ function register(email, username, password) {
           return;
         }
         const token = generateToken(createUserRows.insertId);
-        resolve(token);
+        resolve({token: token, username: username});
       });
     });
   });
