@@ -141,8 +141,8 @@ io.on('connection', (socket) => {
               return;
             }
             if (rows.length === 0) {
-              addLogEntry('Socket', '/getServer', 401, Date.now() - start);
-              socket.emit('getServerListResponse', { status: 'error', message: 'No server found.', server: rows })
+              addLogEntry('Socket', '/getServer', 200, Date.now() - start);
+              socket.emit('getServerListResponse', { status: 'success', message: 'No server found.', server: rows })
             } else {
               addLogEntry('Socket', '/getServer', 200, Date.now() - start);
               socket.emit('getServerListResponse', { status: 'success', server: rows })
