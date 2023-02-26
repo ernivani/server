@@ -130,12 +130,15 @@ io.on('connection', (socket) => {
     });
 
   socket.on('message', (message) => {
-    const { text, timestamp } = message;
-    
-    
-    const sql = 'INSERT INTO messages (id_user, content, date_message) VALUES (1, ?, ?)';
+    const { username,text, timestamp } = message;
 
-    const values = [ text, timestamp];
+    console.log('Message received from ' + username + ': ' + text);
+
+    
+    
+    const sql = 'INSERT INTO messages (id_user, content, date_message) VALUES (?, ?, ?)';
+
+    const values = [ username,text, timestamp];
     db.query(sql, values, (err, result) => {
       if (err) {
         console.error('Error inserting message into database: ', err);
@@ -159,7 +162,7 @@ io.on('connection', (socket) => {
           }
           else if (rows.length === 0) {
             logWithTime('No messages in database.');
-            return;
+            socket.emit('historyResponse', {status: 'success', a: []});
           }
           
           
