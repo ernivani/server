@@ -1,29 +1,14 @@
-const { http, io, app } = require('./app');
-const db = require('./db');
-const { md5 } = require('./utils');
-const { login, register } = require('./user');
-const { verifyToken, closeToken } = require('./auth');
-const { forgetPassword } = require('./forgetPassword');
-const { logToFile } = require('./log');
+const { http, io, app } = require('./utils/app');
+const db = require('./utils/db');
+const { md5 } = require('./utils/utils');
+const { login, register } = require('./utils/user');
+const { verifyToken, closeToken } = require('./utils/auth');
+const { forgetPassword } = require('./utils/forgetPassword');
+const { logToFile, logWithTime, addLogEntry } = require('./utils/log');
 
-const logs = [];
+const { socketAuth } = require('./sockets/socket-auth');
 
-function logWithTime(msg) {
-  logToFile(msg);
-}
 
-function addLogEntry(method, url, status, responseTime) {
-  const logEntry = {
-    method,
-    url,
-    status,
-    responseTime,
-    timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
-  };
-
-  logs.push(logEntry);
-  logToFile(JSON.stringify(logEntry));
-}
 
 
 
@@ -42,32 +27,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('auth', (token) => {
-    logWithTime(`Socket ${socket.id} sent an auth request.`);
-    const start = Date.now();
-    const payload = verifyToken(token);
-    if (payload) {
-      const userId = payload.id;
-      const sql = 'SELECT * FROM user WHERE id = ?';
-      db.query(sql, [userId], (err, rows) => {
-        if (err) {
-          console.error('Error retrieving user from database: ', err);
-          addLogEntry('Socket', '/auth', 500, Date.now() - start);
-          socket.emit('authResponse', { status: 'error', message: 'Database error.' });
-          return;
-        }
-        if (rows.length === 0) {
-          addLogEntry('Socket', '/auth', 401, Date.now() - start);
-          socket.emit('authResponse', { status: 'error', message: 'Invalid token.' });
-        } else {
-          addLogEntry('Socket', '/auth', 200, Date.now() - start);
-          socket.emit('authResponse', { status: 'success' });
-        }
-      });
-    } else {
-      addLogEntry('Socket', '/auth', 401, Date.now() - start);
-      socket.emit('authResponse', { status: 'error', message: 'Invalid token.' });
-    }
+  socket.on('auth', (data) => {
+    logWithTime(`Socket ${data.id} sent an auth request.`);
+    
+    socketAuth(data, (err) => {
+      if (err) {
+        logWithTime(`Socket ${socket.id} failed to authenticate.`);
+        socket.emit('authResponse', { status: 'error', message: err.message });
+      } else {
+        logWithTime(`Socket ${socket.id} authenticated successfully.`);
+        socket.emit('authResponse', { status: 'success' });
+      }
+    });
   });
 
   socket.on('logout', (data) => {
@@ -115,7 +86,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('getServerList', (token) => {
+  socket.on('getServer', (token) => {
     logWithTime(`Socket ${socket.id} sent a getServer request.`);
     const start = Date.now();
     const payload = verifyToken(token);
@@ -126,27 +97,27 @@ io.on('connection', (socket) => {
         if (err) {
           console.error('Error retrieving user from database: ', err);
           addLogEntry('Socket', '/getServer', 500, Date.now() - start);
-          socket.emit('getServerListResponse', { status: 'error', message: 'Database error.' });
+          socket.emit('getServerResponse', { status: 'error', message: 'Database error.' });
           return;
         }
         if (rows.length === 0) {
           addLogEntry('Socket', '/getServer', 401, Date.now() - start);
-          socket.emit('getServerListResponse', { status: 'error', message: 'Invalid token.' });
+          socket.emit('getServerResponse', { status: 'error', message: 'Invalid token.' });
         } else {
           const sql = 'SELECT * FROM server join members on server.id = members.server_id WHERE members.member_name = ?';
           db.query(sql, [rows[0].id], (err, rows) => {
             if (err) {
               console.error('Error retrieving user from database: ', err);
               addLogEntry('Socket', '/getServer', 500, Date.now() - start);
-              socket.emit('getServerListResponse', { status: 'error', message: 'Database error.' });
+              socket.emit('getServerResponse', { status: 'error', message: 'Database error.' });
               return;
             }
             if (rows.length === 0) {
               addLogEntry('Socket', '/getServer', 200, Date.now() - start);
-              socket.emit('getServerListResponse', { status: 'success', message: 'No server found.', server: rows })
+              socket.emit('getServerResponse', { status: 'success', message: 'No server found.', server: rows })
             } else {
               addLogEntry('Socket', '/getServer', 200, Date.now() - start);
-              socket.emit('getServerListResponse', { status: 'success', server: rows })
+              socket.emit('getServerResponse', { status: 'success', server: rows })
               }
             });
         }
@@ -157,50 +128,15 @@ io.on('connection', (socket) => {
       }
     });
 
-
-
-    // socket.emit('serverListUpdate', { status: 'success', server: rows });
-
-
-    socket.on('getLogs', (token) => {
-      logWithTime(`Socket ${socket.id} sent a getLogs request.`);
-      const start = Date.now();
-      const payload = verifyToken(token);
-      if (payload) {
-        const userId = payload.id;
-        const sql = 'SELECT * FROM user WHERE id = ?';
-        db.query(sql, [userId], (err, rows) => {
-          if (err) {
-            console.error('Error retrieving user from database: ', err);
-            addLogEntry('Socket', '/getLogs', 500, Date.now() - start);
-            socket.emit('getLogsResponse', { status: 'error', message: 'Database error.' });
-            return;
-          }
-          if (rows.length === 0) {
-            addLogEntry('Socket', '/getLogs', 401, Date.now() - start);
-            socket.emit('getLogsResponse', { status: 'error', message: 'Invalid token.' });
-          } else {
-            addLogEntry('Socket', '/getLogs', 200, Date.now() - start);
-            socket.emit('getLogsResponse', { status: 'success', logs: logs });
-          }
-        });
-      } else {
-        addLogEntry('Socket', '/getLogs', 401, Date.now() - start);
-        socket.emit('getLogsResponse', { status: 'error', message: 'Invalid token.' });
-      }
-    });
-
-
-    socket.on('disconnect', (socket) => {
-      logWithTime(`Socket ${socket.id} disconnected.`);
-    });
-
 });
+
+
+
+
 
 const PORT = process.env.PORT || 5000;
 
 logWithTime('Starting server...');
-logWithTime(process.env.DB_HOST);
 
 
 http.listen(PORT, () => {
