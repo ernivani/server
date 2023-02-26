@@ -4,12 +4,12 @@ const { md5 } = require('./utils');
 const { login, register } = require('./user');
 const { verifyToken, closeToken } = require('./auth');
 const { forgetPassword } = require('./forgetPassword');
+const { logToFile } = require('./log');
 
 const logs = [];
 
 function logWithTime(msg) {
-  const currentDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  console.log(`[${currentDate}] ${msg}`);
+  logToFile(msg);
 }
 
 function addLogEntry(method, url, status, responseTime) {
@@ -22,8 +22,9 @@ function addLogEntry(method, url, status, responseTime) {
   };
 
   logs.push(logEntry);
-  console.log(logEntry);
+  logToFile(JSON.stringify(logEntry));
 }
+
 
 
 io.on('connection', (socket) => {
