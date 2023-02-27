@@ -8,7 +8,7 @@ app.use(cors(), cookieParser());
 
 const io = require('socket.io')(http, {
   cors: {
-    origin: 'http://213.32.89.28:8080',
+    origin: 'https://impin.fr',
     methods: ['GET', 'POST'],
   },
 });
