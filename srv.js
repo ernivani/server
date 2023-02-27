@@ -185,7 +185,7 @@ io.on('connection', (socket) => {
 
     socket.on("disconnect", () => {
       socket.broadcast.emit("callEnded")
-      console.log("disconnected")
+      console.log(socket.id)
     })
 
     socket.on("callUser", (data) => {
