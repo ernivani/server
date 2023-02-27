@@ -1,6 +1,7 @@
 const db = require('./db');
 const { generateToken } = require('./auth');
 const { md5 } = require('./utils');
+const { logWithTime } = require('./log');
 
 
 function login(email, password) {
@@ -8,6 +9,7 @@ function login(email, password) {
     const sql = 'SELECT * FROM user WHERE user_email = ? AND user_password = ?';
     db.query(sql, [email, md5(password)], (err, rows) => {
       if (err) {
+        console.error('Error retrieving user from database: ', err);
         reject(err);
         return;
       }
@@ -26,6 +28,9 @@ function register(email, username, password) {
   return new Promise((resolve, reject) => {
     const checkEmailSql = 'SELECT * FROM user WHERE user_email = ?';
     db.query(checkEmailSql, [email], (checkEmailErr, checkEmailRows) => {
+      logWithTime('Checking email...')
+      logWithTime(checkEmailRows);
+      logWithTime(checkEmailErr);
       if (checkEmailErr) {
         reject(checkEmailErr);
         return;
