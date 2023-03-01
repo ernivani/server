@@ -154,7 +154,7 @@ io.on('connection', (socket) => {
       const start = Date.now();
       const payload = verifyToken(data);
       if (payload) {
-        const sql = 'SELECT * FROM messages ORDER BY date_message DESC LIMIT 20';
+        const sql = 'SELECT * FROM messages ORDER BY date_message DESC LIMIT 10';
         db.query(sql, (err, rows) => {
           if (err) {
             console.error('Error retrieving messages from database: ', err);
