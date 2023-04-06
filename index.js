@@ -9,7 +9,16 @@ const user = require("./Routes/userRoutes.js");
 const server = http.createServer(app);
 const io = socketIO(server);
 
-app.use(express.json(), cors());
+const corsOptions = {
+    origin: "https://impin.fr",
+    optionsSuccessStatus: 200,
+};
+
+// 
+
+
+app.use(express.json(), cors(corsOptions));
+
 
 app.use("/user", user);
 
