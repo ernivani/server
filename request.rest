@@ -1,0 +1,40 @@
+# POST https://api.impin.fr/user/login 
+# Content-Type: application/json
+
+# {
+#     "email": "contact@impin.fr",
+#     "password" : "impin"
+# }
+
+# POST https://api.impin.fr/user/register
+# Content-Type: application/json
+
+# {
+#     "email": "uwu@uwu.com",
+#     "username": "uwu",
+#     "password": "uwu"
+# }
+
+# POST https://api.impin.fr/user/token
+# Content-Type: application/json
+
+# {
+#     "uid": 21,
+#     "token" :"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIxLCJ0b2tlbklkIjoiMnpva2czNmN3amJ4NWh3NWNqNXVyIiwiaWF0IjoxNjgwNzE2NzU1LCJleHAiOjE2ODMzMDg3NTV9.W_9PIhKZapDMy8tvCBruMkWp0LQmt6_55zM5G-461zE"
+# }
+
+# POST https://api.impin.fr/user/changePassword
+# Content-Type: application/json
+
+# {
+#     "uid": 18,
+#     "oldPassword": "aaaa",
+#     "newPassword": "impin"
+# }
+
+POST https://api.impin.fr/user/resetPassword
+Content-Type: application/json
+
+{
+    "email": "tlindeker@gmail.com",
+}
