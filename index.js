@@ -10,7 +10,7 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 const corsOptions = {
-    origin: "https://impin.fr",
+    origin: "*",
     optionsSuccessStatus: 200,
 };
 
