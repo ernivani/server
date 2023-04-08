@@ -6,6 +6,10 @@ const { randomBytes } = require("crypto");
 
 const userLogin = async (req, res) => {
     const { email, password } = req.body;
+    
+    // const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+    // console.log(ip);
+    // todo: add the ip to the database and if
     const query = `SELECT * FROM user_information WHERE email = ? AND password = ?`;
     const params = [email, md5(password)];
     try {
@@ -59,8 +63,8 @@ const userRegister = async (req, res) => {
         }
 
         // Insérer les données de l'utilisateur
-        const insertQuery = `INSERT INTO user_information (username, password, email) VALUES (?, ?, ?)`;
-        const insertParams = [username, md5(password), email];
+        const insertQuery = `INSERT INTO user_information (username, password, email,created_at) VALUES (?, ?, ?,?)`;
+        const insertParams = [username, md5(password), email, new Date()];
 
         const insertResults = await new Promise((resolve, reject) => {
             connection.query(
