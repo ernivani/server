@@ -8,103 +8,105 @@ const server = http.createServer(app);
 const jwt = require("jsonwebtoken");
 const connection = require("./config/dbConfig.js");
 const io = require("socket.io")(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-    },
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
 
 const corsOptions = {
-    origin: "https://impin.fr",
-    methods: ["GET", "POST"],
+  origin: "https://impin.fr",
+  methods: ["GET", "POST"],
 };
 
 app.use(express.json(), cors(corsOptions));
 app.use("/user", user);
 
 app.get("/", (req, res) => {
-    res.json({ message: "Welcome to the API" }).status(200);
+  res.json({ message: "Welcome to the API" }).status(200);
 });
 
 server.listen(port, () => {
-    console.log(`Server started on port ${port}`);
+  console.log(`Server started on port ${port}`);
 });
 
-// Liste des sockets connectés
+// List of connected sockets
 global.connectedSockets = {};
 
-// Fonction pour vérifier et ajouter un socket à la liste des sockets connectés
+// Function to verify and add a socket to the list of connected sockets
 const connectSocket = async (socket, token) => {
-    try {
-        const decoded = jwt.verify(token, "ernitropbg");
-        socket.id = decoded.userId.toString();
-        console.log("New socket id:", socket.id);
+  try {
+    const decoded = jwt.verify(token, "ernitropbg");
+    socket.id = decoded.userId.toString();
+    console.log("New socket id:", socket.id);
 
-        connectedSockets[socket.id] = socket; // Ajoute le socket à la liste des sockets connectés
-    } catch (err) {
-        console.log("Error:", err);
-    }
+    connectedSockets[socket.id] = socket; // Add the socket to the list of connected sockets
+  } catch (err) {
+    console.log("Error:", err);
+  }
 };
 
-// Gestionnaire d'événements pour les demandes d'ami
+// Event handler for friend requests
 const handleFriendRequest = async (socket, data) => {
-    if (!data.receiverId) {
-        console.log("No receiverId");
+  if (!data.receiverId) {
+    console.log("No receiverId");
+    return;
+  }
+  if (socket.id === data.receiverId) {
+    console.log("Can't send friend request to yourself");
+    return;
+  }
+
+  console.log(`Friend request from ${socket.id} to ${data.receiverId}`);
+
+  const checkFriendshipQuery = `
+      SELECT * FROM user_friendships
+      WHERE (user_id1 = ? AND user_id2 = ?) OR (user_id1 = ? AND user_id2 = ?)
+  `;
+
+  connection.query(
+    checkFriendshipQuery,
+    [socket.id, data.receiverId, data.receiverId, socket.id],
+    (err, result) => {
+      if (err) {
+        console.error("Error checking friendship:", err);
         return;
-    }
-    if (socket.id === data.receiverId) {
-        console.log("Can't send friend request to yourself");
+      }
+
+      if (result.length > 0) {
+        console.log("Friendship or friend request already exists");
         return;
+      }
+
+      const insertFriendRequestQuery = `
+          INSERT INTO user_friendships (user_id1, user_id2, status, action_user_id, created_at, updated_at)
+          VALUES (?, ?, 'pending', ?, NOW(), NOW())
+      `;
+
+      connection.query(
+        insertFriendRequestQuery,
+        [socket.id, data.receiverId, socket.id],
+        (err, result) => {
+          if (err) {
+            console.error("Error inserting friend request:", err);
+            return;
+          }
+          console.log("Friend request inserted into the database:", result);
+
+          handleGetFriend(socket, data);
+          if (connectedSockets[data.receiverId]) {
+            connectedSockets[data.receiverId].emit("friend_request_received", {
+              user_id1: socket.id,
+              user_id2: data.receiverId,
+              status: "pending",
+              action_user_id: socket.id,
+            });
+          }
+        }
+      );
     }
-
-    console.log(`Friend request from ${socket.id} to ${data.receiverId}`);
-
-    const checkFriendshipQuery = `
-        SELECT * FROM user_friendships
-        WHERE (user_id1 = ? AND user_id2 = ?) OR (user_id1 = ? AND user_id2 = ?)
-    `;
-
-    connection.query(checkFriendshipQuery, [socket.id, data.receiverId, data.receiverId, socket.id], (err, result) => {
-        if (err) {
-            console.error("Error checking friendship:", err);
-            return;
-        }
-
-        if (result.length > 0) {
-            console.log("Friendship or friend request already exists");
-            return;
-        }
-
-        const insertFriendRequestQuery = `
-            INSERT INTO user_friendships (user_id1, user_id2, status, action_user_id, created_at, updated_at)
-            VALUES (?, ?, 'pending', ?, NOW(), NOW())
-        `;
-
-        connection.query(
-            insertFriendRequestQuery,
-            [socket.id, data.receiverId, socket.id],
-            (err, result) => {
-                if (err) {
-                    console.error("Error inserting friend request:", err);
-                    return;
-                }
-                console.log("Friend request inserted into the database:", result);
-
-                handleGetFriend(socket, data);
-                if (connectedSockets[data.receiverId]) {
-                    connectedSockets[data.receiverId].emit("friend_request_received", {
-                        user_id1: socket.id,
-                        user_id2: data.receiverId,
-                        status: 'pending',
-                        action_user_id: socket.id,
-                    });
-                }
-
-            }
-        );
-    });
+  );
 };
-
 // Gestionnaire d'événements pour récupérer les demandes d'ami
 const handleGetFriend = async (socket, data) => {
     // Select status from user_friendships and select username from user_information
