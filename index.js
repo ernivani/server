@@ -7,6 +7,7 @@ const user = require("./Routes/userRoutes.js");
 const server = http.createServer(app);
 const jwt = require("jsonwebtoken");
 const connection = require("./config/dbConfig.js");
+const { cp } = require("fs");
 const io = require("socket.io")(server, {
     cors: {
         origin: "*",
@@ -117,9 +118,13 @@ const handleFriendRequest = async (socket, data) => {
 // Gestionnaire d'événements pour récupérer les demandes d'ami
 const handleGetFriend = async (socket, data) => {
     const getFriendshipsQuery = `
-        SELECT * FROM user_friendships
-        WHERE user_id1 = ? OR user_id2 = ?
+    SELECT uf.*, ui1.username AS username1, ui2.username AS username2
+    FROM user_friendships uf
+    JOIN user_information ui1 ON uf.user_id1 = ui1.id
+    JOIN user_information ui2 ON uf.user_id2 = ui2.id
+    WHERE (uf.user_id1 = ? OR uf.user_id2 = ?)
     `;
+
 
     connection.query(
         getFriendshipsQuery,
@@ -198,6 +203,19 @@ const handleAcceptFriendRequest = async (socket, data) => {
 
             // Mettre à jour la liste des amis de l'utilisateur
             handleGetFriend(socket, data);
+            for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
+                if (data.senderId == connectedSocket.id) {
+                    console.log("Emit friend_request_canceled to", connectedSocket.id);
+                    try {
+                        connectedSocket.emit("friend_request_canceled", data);
+                    } catch (error) {
+                        console.log(
+                            "Error while emitting friend_request_canceled:",
+                            error
+                        );
+                    }
+                }
+            }
         }
     );
 };
@@ -223,7 +241,7 @@ const handleCancelFriendRequest = async (socket, data) => {
     );
 
     for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
-        if (data.receiverId == connectedSocket.id) {
+        if (data.senderId == connectedSocket.id) {
             console.log("Emit friend_request_canceled to", connectedSocket.id);
             try {
                 connectedSocket.emit("friend_request_canceled", data);
@@ -257,23 +275,14 @@ const handleDeclineFriendRequest = async (socket, data) => {
             handleGetFriend(socket, data);
 
             // Parcourt la liste des sockets connectés pour trouver l'utilisateur qui a envoyé la demande d'ami
-            for (const [_, connectedSocket] of Object.entries(
-                connectedSockets
-            )) {
-                // Si le socket correspond à l'utilisateur qui a envoyé la demande, émet l'événement 'friend_request_declined'
-                if (connectedSocket.id === data.senderId) {
-                    console.log(
-                        "Emit friend_request_declined to",
-                        connectedSocket.id
-                    );
+            for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
+                if (data.senderId == connectedSocket.id) {
+                    console.log("Emit friend_request_canceled to", connectedSocket.id);
                     try {
-                        connectedSocket.emit("friend_request_declined", {
-                            senderId: data.senderId,
-                            receiverId: socket.id,
-                        });
+                        connectedSocket.emit("friend_request_canceled", data);
                     } catch (error) {
                         console.log(
-                            "Error while emitting friend_request_declined:",
+                            "Error while emitting friend_request_canceled:",
                             error
                         );
                     }
@@ -283,9 +292,42 @@ const handleDeclineFriendRequest = async (socket, data) => {
     );
 };
 
-const handleDeleteFriend = async (socket, data) => {
-    // todo: Modifier la base de données pour supprimer l'ami
-    // et actualiser la liste des amis des deux utilisateurs
+const handleRemoveFriend = async (socket, data) => {
+    // Modifier la base de données pour refuser la demande d'ami 'pending'
+    const updateFriendRequestQuery = `
+        Delete FROM user_friendships
+        WHERE (user_id1 = ? AND user_id2 = ?) OR (user_id1 = ? AND user_id2 = ?) AND status = 'accepted'
+    `;
+    console.log(data.friendId, socket.id);
+    connection.query(
+        updateFriendRequestQuery,
+        [data.friendId, socket.id, socket.id, data.friendId],
+        (err, result) => {
+            if (err) {
+                console.error("Error updating friend request:", err);
+                return;
+            }
+            console.log("Friend request declined:", result);
+
+            // Mettre à jour la liste des demandes d'ami de l'utilisateur
+            handleGetFriend(socket, data);
+
+            // Parcourt la liste des sockets connectés pour trouver l'utilisateur qui a envoyé la demande d'ami
+            for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
+                if (data.friendId == connectedSocket.id) {
+                    console.log("Emit friend_request_canceled to", connectedSocket.id);
+                    try {
+                        connectedSocket.emit("friend_request_canceled", data);
+                    } catch (error) {
+                        console.log(
+                            "Error while emitting friend_request_canceled:",
+                            error
+                        );
+                    }
+                }
+            }
+        }
+    );
 };
 
 // Gestionnaire d'événements pour les déconnexions
@@ -293,6 +335,7 @@ const handleDisconnect = (socket) => {
     console.log("A user disconnected");
     delete connectedSockets[socket.id]; // Retire le socket de la liste des sockets connectés
 };
+  
 
 io.on("connection", (socket) => {
     console.log("A user connected");
@@ -303,14 +346,9 @@ io.on("connection", (socket) => {
     // Gestionnaire d'événements
     socket.on("friend_request", (data) => handleFriendRequest(socket, data));
     socket.on("get_friend_request", (data) => handleGetFriend(socket, data));
-    socket.on("accept_friend_request", (data) =>
-        handleAcceptFriendRequest(socket, data)
-    );
-    socket.on("decline_friend_request", (data) =>
-        handleDeclineFriendRequest(socket, data)
-    );
-    socket.on("cancel_friend_request", (data) =>
-        handleCancelFriendRequest(socket, data)
-    );
+    socket.on("accept_friend_request", (data) => handleAcceptFriendRequest(socket, data));
+    socket.on("decline_friend_request", (data) => handleDeclineFriendRequest(socket, data));
+    socket.on("cancel_friend_request", (data) => handleCancelFriendRequest(socket, data));
+    socket.on("remove_friend", (data) => handleRemoveFriend(socket, data));
     socket.on("disconnect", () => handleDisconnect(socket));
 });
