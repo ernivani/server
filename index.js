@@ -32,8 +32,8 @@ const io = require("socket.io")(server, {
 
 const jwt = require("jsonwebtoken");
 
-const connectedSockets = {}; // Objet pour stocker les sockets connectés
 
+global.connectedSockets = {}; // Liste des sockets connectés
 io.on("connection", (socket) => {
     console.log("A user connected");
 
