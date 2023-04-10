@@ -107,12 +107,15 @@ const handleFriendRequest = async (socket, data) => {
 
 // Gestionnaire d'événements pour récupérer les demandes d'ami
 const handleGetFriend = async (socket, data) => {
+    // Select status from user_friendships and select username from user_information
     const getFriendshipsQuery = `
-        SELECT * FROM user_friendships
-        WHERE user_id1 = ? OR user_id2 = ?
+        SELECT uf.*, ui.username
+        FROM user_friendships uf
+        JOIN user_information ui ON (uf.user_id1 = ui.id OR uf.user_id2 = ui.id) AND ui.id != ?
+        WHERE uf.user_id1 = ? OR uf.user_id2 = ?
     `;
 
-    connection.query(getFriendshipsQuery, [socket.id, socket.id], (err, result) => {
+    connection.query(getFriendshipsQuery, [socket.id, socket.id, socket.id], (err, result) => {
         if (err) {
             console.error("Error getting friendships:", err);
             return;
@@ -122,10 +125,17 @@ const handleGetFriend = async (socket, data) => {
         const friends = [];
 
         for (const friendship of result) {
+            const friendId = friendship.user_id1 === socket.id ? friendship.user_id2 : friendship.user_id1;
+            const friendData = {
+                id: friendId,
+                username: friendship.username,
+                status: friendship.status
+            };
+
             if (friendship.status === 'pending') {
-                pendingRequests.push(friendship);
+                pendingRequests.push(friendData);
             } else if (friendship.status === 'accepted') {
-                friends.push(friendship);
+                friends.push(friendData);
             }
         }
 
@@ -137,6 +147,7 @@ const handleGetFriend = async (socket, data) => {
         }
     });
 };
+
 // Gestionnaire d'événements pour accepter les demandes d'ami
 const handleAcceptFriendRequest = async (socket, data) => {
     // Modifier la base de données pour accepter la demande d'ami 'pending'
@@ -208,7 +219,6 @@ const handleCancelFriendRequest = async (socket, data) => {
     }
 };
   
-
 
 const handleDeclineFriendRequest = async (socket, data) => {
     // Modifier la base de données pour refuser la demande d'ami 'pending'
