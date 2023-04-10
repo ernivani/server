@@ -32,6 +32,8 @@ const io = require("socket.io")(server, {
 
 const jwt = require("jsonwebtoken");
 
+const connectedSockets = {}; // Objet pour stocker les sockets connectés
+
 io.on("connection", (socket) => {
     console.log("A user connected");
 
@@ -41,6 +43,8 @@ io.on("connection", (socket) => {
         const decoded = jwt.verify(token, "ernitropbg");
         socket.id = decoded.userId.toString();
         console.log("New socket id:", socket.id);
+
+        connectedSockets[socket.id] = socket; // Ajoute le socket à la liste des sockets connectés
     } catch (err) {
         console.log("Error:", err);
     }
@@ -50,8 +54,7 @@ io.on("connection", (socket) => {
         console.log(`Friend request from ${socket.id} to ${data.receiverId}`);
 
         // Parcourt la liste des sockets connectés pour trouver le destinataire
-        io.sockets.sockets.forEach((connectedSocket) => {
-            console.log(connectedSocket.id);
+        for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
 
             // Si le socket correspond au destinataire, émet l'événement 'friend_request'
             if (connectedSocket.id === data.receiverId) {
@@ -61,11 +64,12 @@ io.on("connection", (socket) => {
                     console.log("Error while emitting friend_request:", error);
                 }
             }
-        });
+        }
     });
 
     // Gestionnaire d'événements pour les déconnexions
     socket.on("disconnect", () => {
         console.log("A user disconnected");
+        delete connectedSockets[socket.id]; // Retire le socket de la liste des sockets connectés
     });
 });
