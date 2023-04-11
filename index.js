@@ -7,16 +7,10 @@ const user = require("./Routes/userRoutes.js");
 const server = http.createServer(app);
 const jwt = require("jsonwebtoken");
 const connection = require("./config/dbConfig.js");
-const { cp } = require("fs");
-const io = require("socket.io")(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-    },
-});
+const socket = require("socket.io");
 
 const corsOptions = {
-    origin: "https://impin.fr",
+    origin: "*",
     methods: ["GET", "POST"],
 };
 
@@ -31,324 +25,76 @@ server.listen(port, () => {
     console.log(`Server started on port ${port}`);
 });
 
-// Liste des sockets connectés
-global.connectedSockets = {};
+const io = socket(server, {
+    cors: {
+        origin: "*",
+        credentials: true,
+    },
+});
 
-// Fonction pour vérifier et ajouter un socket à la liste des sockets connectés
-const connectSocket = async (socket, token) => {
-    try {
-        const decoded = jwt.verify(token, "ernitropbg");
-        socket.id = decoded.userId.toString();
-        console.log("New socket id:", socket.id);
+global.onlineUsers = new Map();
 
-        connectedSockets[socket.id] = socket; // Ajoute le socket à la liste des sockets connectés
-    } catch (err) {
-        console.log("Error:", err);
-    }
+const add_user = (userId, socketId) => {
+    onlineUsers.set(socketId, userId);
+    console.log(onlineUsers);
 };
 
-// Gestionnaire d'événements pour les demandes d'ami
-const handleFriendRequest = async (socket, data) => {
-    if (!data.receiverId) {
-        console.log("No receiverId");
-        return;
-    }
-    if (socket.id === data.receiverId) {
-        console.log("Can't send friend request to yourself");
-        return;
-    }
+const get_server_list = async (userId) => {
+    const query = `SELECT * FROM servers 
+    JOIN server_members ON servers.id = server_members.server_id 
+    WHERE server_members.user_id = ?`;
+    const params = [userId];
+    connection.query(query, params, (err, result) => {
+        if (err) {
+            console.log(err);
+        } else {
+            console.log(result)
+            // serverList = id name 
+            const serverList = result.map((server) => { return { id: server.id, name: server.name } });
+            chatSocket.emit("server-list", serverList);
+        }
+    });
+};
 
-    console.log(`Friend request from ${socket.id} to ${data.receiverId}`);
-
-    const checkFriendshipQuery = `
-        SELECT * FROM user_friendships
-        WHERE (user_id1 = ? AND user_id2 = ?) OR (user_id1 = ? AND user_id2 = ?)
-    `;
-
-    connection.query(
-        checkFriendshipQuery,
-        [socket.id, data.receiverId, data.receiverId, socket.id],
-        (err, result) => {
-            if (err) {
-                console.error("Error checking friendship:", err);
-                return;
-            }
-
-            if (result.length > 0) {
-                console.log("Friendship or friend request already exists");
-                return;
-            }
-
-            const insertFriendRequestQuery = `
-            INSERT INTO user_friendships (user_id1, user_id2, status, action_user_id, created_at, updated_at)
-            VALUES (?, ?, 'pending', ?, NOW(), NOW())
-        `;
-
-            connection.query(
-                insertFriendRequestQuery,
-                [socket.id, data.receiverId, socket.id],
-                (err, result) => {
-                    if (err) {
-                        console.error("Error inserting friend request:", err);
-                        return;
-                    }
-                    console.log(
-                        "Friend request inserted into the database:",
-                        result
-                    );
-
-                    handleGetFriend(socket, data);
-                    if (connectedSockets[data.receiverId]) {
-                        connectedSockets[data.receiverId].emit(
-                            "friend_request_received",
-                            {
-                                user_id1: socket.id,
-                                user_id2: data.receiverId,
-                                status: "pending",
-                                action_user_id: socket.id,
-                            }
-                        );
-                    }
+const create_server = async (params) => {
+    const query = 'INSERT INTO servers (name, owner_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())';
+    console.log(params);
+    const param = [params.serverName, params.userId];
+    console.log(param);
+    console.log(query, param);
+    connection.query(query, param, (err, result) => {
+        if (err) {
+            console.log(err);
+        } else {
+            console.log(result);
+            const serverId = result.insertId;
+            const query = 'INSERT INTO server_members (server_id, user_id, joined_at) VALUES (?, ?, NOW())';
+            const params = [serverId, param[1]];
+            connection.query(query, params, (err, result) => {
+                if (err) {
+                    console.log(err);
+                } else {
+                    const server = { id: serverId, name: param[0] };
+                    io.emit("server-created", server);
                 }
-            );
+            });
         }
-    );
+    });
 };
 
-// Gestionnaire d'événements pour récupérer les demandes d'ami
-const handleGetFriend = async (socket, data) => {
-    const getFriendshipsQuery = `
-    SELECT uf.*, ui1.username AS username1, ui2.username AS username2
-    FROM user_friendships uf
-    JOIN user_information ui1 ON uf.user_id1 = ui1.id
-    JOIN user_information ui2 ON uf.user_id2 = ui2.id
-    WHERE (uf.user_id1 = ? OR uf.user_id2 = ?)
-    `;
 
-
-    connection.query(
-        getFriendshipsQuery,
-        [socket.id, socket.id],
-        (err, result) => {
-            if (err) {
-                console.error("Error getting friendships:", err);
-                return;
-            }
-
-            const pendingRequests = [];
-            const friends = [];
-
-            for (const friendship of result) {
-                if (friendship.status === "pending") {
-                    pendingRequests.push(friendship);
-                } else if (friendship.status === "accepted") {
-                    friends.push(friendship);
-                }
-            }
-
-            try {
-                socket.emit("friend_requests", pendingRequests);
-                socket.emit("friends_list", friends);
-            } catch (error) {
-                console.log(
-                    "Error while emitting friend_requests and friends_list:",
-                    error
-                );
-            }
-        }
-    );
-};
-// Gestionnaire d'événements pour accepter les demandes d'ami
-const handleAcceptFriendRequest = async (socket, data) => {
-    // Modifier la base de données pour accepter la demande d'ami 'pending'
-    const updateFriendRequestQuery = `
-        UPDATE user_friendships
-        SET status = 'accepted', action_user_id = ?, updated_at = NOW()
-        WHERE (user_id1 = ? AND user_id2 = ?) AND status = 'pending' 
-    `;
-    console.log(data);
-    connection.query(
-        updateFriendRequestQuery,
-        [socket.id, data.senderId, socket.id],
-        (err, result) => {
-            if (err) {
-                console.error("Error updating friend request:", err);
-                return;
-            }
-            console.log("Friend request accepted:", result);
-
-            // Parcourt la liste des sockets connectés pour trouver l'utilisateur qui a envoyé la demande d'ami
-            for (const [_, connectedSocket] of Object.entries(
-                connectedSockets
-            )) {
-                // Si le socket correspond à l'utilisateur qui a envoyé la demande, émet l'événement 'friend_request_accepted'
-                if (connectedSocket.id === data.senderId) {
-                    console.log(
-                        "Emit friend_request_accepted to",
-                        connectedSocket.id
-                    );
-                    try {
-                        connectedSocket.emit("friend_request_accepted", {
-                            senderId: data.senderId,
-                            receiverId: socket.id,
-                        });
-                    } catch (error) {
-                        console.log(
-                            "Error while emitting friend_request_accepted:",
-                            error
-                        );
-                    }
-                }
-            }
-
-            // Mettre à jour la liste des amis de l'utilisateur
-            handleGetFriend(socket, data);
-            for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
-                if (data.senderId == connectedSocket.id) {
-                    console.log("Emit friend_request_canceled to", connectedSocket.id);
-                    try {
-                        connectedSocket.emit("friend_request_canceled", data);
-                    } catch (error) {
-                        console.log(
-                            "Error while emitting friend_request_canceled:",
-                            error
-                        );
-                    }
-                }
-            }
-        }
-    );
+const disconnect_user = (socketId) => {
+    onlineUsers.delete(socketId);
+    console.log(onlineUsers);
 };
 
-const handleCancelFriendRequest = async (socket, data) => {
-    const deleteFriendRequestQuery = `
-      DELETE FROM user_friendships
-      WHERE user_id1 = ? AND user_id2 = ? AND status = 'pending'
-    `;
-    connection.query(
-        deleteFriendRequestQuery,
-        [data.senderId, data.receiverId],
-        (err, result) => {
-            if (err) {
-                console.error("Error deleting friend request:", err);
-                return;
-            }
-            console.log("Friend request canceled:", result);
-
-            // Update the friend request list of the current user
-            handleGetFriend(socket, data);
-        }
-    );
-
-    for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
-        if (data.senderId == connectedSocket.id) {
-            console.log("Emit friend_request_canceled to", connectedSocket.id);
-            try {
-                connectedSocket.emit("friend_request_canceled", data);
-            } catch (error) {
-                console.log(
-                    "Error while emitting friend_request_canceled:",
-                    error
-                );
-            }
-        }
-    }
-};
-
-const handleDeclineFriendRequest = async (socket, data) => {
-    // Modifier la base de données pour refuser la demande d'ami 'pending'
-    const updateFriendRequestQuery = `
-        Delete FROM user_friendships
-        WHERE (user_id1 = ? AND user_id2 = ?) AND status = 'pending'
-    `;
-    connection.query(
-        updateFriendRequestQuery,
-        [data.senderId, socket.id],
-        (err, result) => {
-            if (err) {
-                console.error("Error updating friend request:", err);
-                return;
-            }
-            console.log("Friend request declined:", result);
-
-            // Mettre à jour la liste des demandes d'ami de l'utilisateur
-            handleGetFriend(socket, data);
-
-            // Parcourt la liste des sockets connectés pour trouver l'utilisateur qui a envoyé la demande d'ami
-            for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
-                if (data.senderId == connectedSocket.id) {
-                    console.log("Emit friend_request_canceled to", connectedSocket.id);
-                    try {
-                        connectedSocket.emit("friend_request_canceled", data);
-                    } catch (error) {
-                        console.log(
-                            "Error while emitting friend_request_canceled:",
-                            error
-                        );
-                    }
-                }
-            }
-        }
-    );
-};
-
-const handleRemoveFriend = async (socket, data) => {
-    // Modifier la base de données pour refuser la demande d'ami 'pending'
-    const updateFriendRequestQuery = `
-        Delete FROM user_friendships
-        WHERE (user_id1 = ? AND user_id2 = ?) OR (user_id1 = ? AND user_id2 = ?) AND status = 'accepted'
-    `;
-    console.log(data.friendId, socket.id);
-    connection.query(
-        updateFriendRequestQuery,
-        [data.friendId, socket.id, socket.id, data.friendId],
-        (err, result) => {
-            if (err) {
-                console.error("Error updating friend request:", err);
-                return;
-            }
-            console.log("Friend request declined:", result);
-
-            // Mettre à jour la liste des demandes d'ami de l'utilisateur
-            handleGetFriend(socket, data);
-
-            // Parcourt la liste des sockets connectés pour trouver l'utilisateur qui a envoyé la demande d'ami
-            for (const [_, connectedSocket] of Object.entries(connectedSockets)) {
-                if (data.friendId == connectedSocket.id) {
-                    console.log("Emit friend_request_canceled to", connectedSocket.id);
-                    try {
-                        connectedSocket.emit("friend_request_canceled", data);
-                    } catch (error) {
-                        console.log(
-                            "Error while emitting friend_request_canceled:",
-                            error
-                        );
-                    }
-                }
-            }
-        }
-    );
-};
-
-// Gestionnaire d'événements pour les déconnexions
-const handleDisconnect = (socket) => {
-    console.log("A user disconnected");
-    delete connectedSockets[socket.id]; // Retire le socket de la liste des sockets connectés
-};
-  
 
 io.on("connection", (socket) => {
-    console.log("A user connected");
 
-    // Connecte le socket à la liste des sockets connectés
-    connectSocket(socket, socket.handshake.query.token);
+    global.chatSocket = socket;
 
-    // Gestionnaire d'événements
-    socket.on("friend_request", (data) => handleFriendRequest(socket, data));
-    socket.on("get_friend_request", (data) => handleGetFriend(socket, data));
-    socket.on("accept_friend_request", (data) => handleAcceptFriendRequest(socket, data));
-    socket.on("decline_friend_request", (data) => handleDeclineFriendRequest(socket, data));
-    socket.on("cancel_friend_request", (data) => handleCancelFriendRequest(socket, data));
-    socket.on("remove_friend", (data) => handleRemoveFriend(socket, data));
-    socket.on("disconnect", () => handleDisconnect(socket));
+    socket.on("add-user", (userId) => {add_user(userId, socket.id)});
+    socket.on("get-server-list", (userId) => {get_server_list(userId)});
+    socket.on("create-server", (params) => {create_server(params)});
+    socket.on("disconnect", () => {disconnect_user(socket.id)});
 });
