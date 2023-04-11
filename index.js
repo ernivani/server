@@ -48,7 +48,6 @@ const get_server_list = async (userId) => {
         if (err) {
             console.log(err);
         } else {
-            console.log(result)
             // serverList = id name 
             const serverList = result.map((server) => { return { id: server.id, name: server.name } });
             chatSocket.emit("server-list", serverList);
@@ -58,15 +57,11 @@ const get_server_list = async (userId) => {
 
 const create_server = async (params) => {
     const query = 'INSERT INTO servers (name, owner_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())';
-    console.log(params);
     const param = [params.serverName, params.userId];
-    console.log(param);
-    console.log(query, param);
     connection.query(query, param, (err, result) => {
         if (err) {
             console.log(err);
         } else {
-            console.log(result);
             const serverId = result.insertId;
             const query = 'INSERT INTO server_members (server_id, user_id, joined_at) VALUES (?, ?, NOW())';
             const params = [serverId, param[1]];
@@ -85,7 +80,6 @@ const create_server = async (params) => {
 
 const disconnect_user = (socketId) => {
     onlineUsers.delete(socketId);
-    console.log(onlineUsers);
 };
 
 
