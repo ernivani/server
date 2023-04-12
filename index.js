@@ -33,7 +33,13 @@ global.io = socket(server, {
 
 global.onlineUsers = new Map();
 
-const {add_user, get_server_list, create_server, disconnect_user} = require("./socket/request.js");
+const {
+    add_user,
+    get_server_list, 
+    create_server, 
+    disconnect_user,
+    get_channel_by_server,
+} = require("./socket/request.js");
 
 io.on("connection", (socket) => {
     global.chatSocket = socket;
@@ -47,6 +53,11 @@ io.on("connection", (socket) => {
     socket.on("create-server", (params) => {
         create_server(params);
     });
+
+    socket.on("get-channel-by-server", (paramss) => {
+        get_channel_by_server(paramss);
+    });
+
     socket.on("disconnect", () => {
         disconnect_user(socket.id);
     });

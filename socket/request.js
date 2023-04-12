@@ -22,10 +22,40 @@ const get_server_list = async (userId) => {
         } else {
             // serverList = id name
             const serverList = result.map((server) => {
-                return { id: server.id, name: server.name, cname: server.cname, ctype: server.ctype, cid: server.cid };
+                return {
+                    id: server.id,
+                    name: server.name,
+                    cname: server.cname,
+                    ctype: server.ctype,
+                    cid: server.cid,
+                };
             });
             console.log(serverList);
             chatSocket.emit("server-list", serverList);
+        }
+    });
+};
+
+const get_channel_by_server = async (paramss) => {
+    const serverId = paramss.serverId;
+    const userId = paramss.userId;
+    const query = `SELECT c.id, c.name, c.type
+    FROM channels c
+    WHERE c.server_id = ?
+    `;
+    const params = [serverId];
+    connection.query(query, params, (err, result) => {
+        if (err) {
+            console.log(err);
+        } else {
+            const channelList = result.map((channel) => {
+                return {
+                    id: channel.id,
+                    name: channel.name,
+                    type: channel.type,
+                };
+            });
+            chatSocket.emit("channel-list", channelList);
         }
     });
 };
@@ -47,7 +77,13 @@ const create_server = async (params) => {
                     console.log(err);
                 } else {
                     const first_channel = await initialize_server(serverId);
-                    const server = { id: serverId, name: param[0], cname: first_channel.cname, ctype: first_channel.ctype, cid: first_channel.cid };
+                    const server = {
+                        id: serverId,
+                        name: param[0],
+                        cname: first_channel.cname,
+                        ctype: first_channel.ctype,
+                        cid: first_channel.cid,
+                    };
                     io.emit("server-created", server);
                 }
             });
@@ -62,8 +98,6 @@ const join_server = async (params) => {
 };
 
 const initialize_server = async (serverId) => {
-   
-
     // Insert voice channel
     const voiceChannelQuery =
         'INSERT INTO channels (server_id, name, type, created_at, updated_at) VALUES (?, ?, "voice", NOW(), NOW())';
@@ -87,23 +121,13 @@ const initialize_server = async (serverId) => {
             }
         }
     );
-     // Insert text channel
-     let cname;
-     let cid;
-     let ctype;
-     const textChannelQuery =
-         'INSERT INTO channels (server_id, name, type, created_at, updated_at) VALUES (?, ?, "text", NOW(), NOW())';
-     const textChannelParams = [serverId, "Text Channel"];
-    //  connection.query(textChannelQuery, textChannelParams, (err, result) => {
-    //      if (err) {
-    //          console.log(err);
-    //      } else {
-    //          cname = "Text Channel";
-    //          cid = result.insertId;
-    //          ctype = "text";
-    //          console.log(cname, cid, ctype);
-    //      }
-    //  });
+    // Insert text channel
+    let cname;
+    let cid;
+    let ctype;
+    const textChannelQuery =
+        'INSERT INTO channels (server_id, name, type, created_at, updated_at) VALUES (?, ?, "text", NOW(), NOW())';
+    const textChannelParams = [serverId, "Text Channel"];
     return new Promise((resolve, reject) => {
         connection.query(textChannelQuery, textChannelParams, (err, result) => {
             if (err) {
@@ -114,8 +138,7 @@ const initialize_server = async (serverId) => {
                 ctype = "text";
                 resolve({ cname, cid, ctype });
             }
-        }
-        );
+        });
     });
 };
 
@@ -128,5 +151,5 @@ module.exports = {
     get_server_list,
     create_server,
     disconnect_user,
+    get_channel_by_server,
 };
-
