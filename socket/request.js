@@ -56,9 +56,9 @@ const create_server = async (params) => {
 };
 
 const join_server = async (params) => {
-    const query =
-        "INSERT INTO server_members (server_id, user_id, joined_at) VALUES (?, ?, NOW())";
-    const params = [params.serverId, params.userId];
+    // const query =
+    //     "INSERT INTO server_members (server_id, user_id, joined_at) VALUES (?, ?, NOW())";
+    // const params = [params.serverId, params.userId];
 };
 
 const initialize_server = async (serverId) => {
@@ -129,3 +129,4 @@ module.exports = {
     create_server,
     disconnect_user,
 };
+
