@@ -30,7 +30,6 @@ const get_server_list = async (userId) => {
                     cid: server.cid,
                 };
             });
-            console.log(serverList);
             chatSocket.emit("server-list", serverList);
         }
     });
