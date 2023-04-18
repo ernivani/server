@@ -186,10 +186,10 @@ const resetPasswordSend = async (req, res) => {
             const user = results[0];
             const token = randomBytes(20).toString("hex");
             await new Promise((resolve, reject) => {
-                query = `UPDATE user_information SET reset_password_token = ? WHERE id = ?`;
+                query = `Insert into password_reset (reset_password_token, user_information_id, token_created_at) values (?,?,?)`;
                 connection.query(
                     query,
-                    [token, user.id],
+                    [token, user.id, new Date()],
                     (error, results, fields) => {
                         if (error) {
                             reject(error);
@@ -202,7 +202,7 @@ const resetPasswordSend = async (req, res) => {
             utilsMailer.sendPasswordResetEmail(email, token);
             return res.status(200).json({ message: "Email sent" });
         } else {
-            return res.status(404).json({ message: "User not found" });
+            return res.status(200).json({ message: "Email sent" });
         }
     } catch (error) {
         console.log(error);
@@ -218,7 +218,7 @@ const resetPassword = async (req, res) => {
     const newPassword = md5(password);
     try {
         const results = await new Promise((resolve, reject) => {
-            query = `SELECT * FROM user_information WHERE reset_password_token = ?`;
+            query = `SELECT * FROM password_reset WHERE reset_password_token = ?`;
             connection.query(query, [token], (error, results, fields) => {
                 if (error) {
                     reject(error);
@@ -229,6 +229,7 @@ const resetPassword = async (req, res) => {
         });
         if (results.length > 0) {
             const user = results[0];
+            console.log(user)
             if (user.reset_password_token !== token) {
                 return res.status(401).json({ message: "Invalid token" });
             }else {
@@ -236,7 +237,7 @@ const resetPassword = async (req, res) => {
                     query = `UPDATE user_information SET password = ? WHERE id = ?`;
                     connection.query(
                         query,
-                        [newPassword, user.id],
+                        [newPassword, user.user_information_id],
                         (error, results, fields) => {
                             if (error) {
                                 reject(error);
@@ -246,11 +247,12 @@ const resetPassword = async (req, res) => {
                         }
                     );
                 });
+                console.log(user.id)
                 await new Promise((resolve, reject) => {
-                    query = `UPDATE user_information SET reset_password_token = ? WHERE id = ?`;
+                    query = `DELETE FROM password_reset WHERE user_information_id = ?`;
                     connection.query(
                         query,
-                        [null, user.id],
+                        [user.user_information_id],
                         (error, results, fields) => {
                             if (error) {
                                 reject(error);
@@ -263,7 +265,7 @@ const resetPassword = async (req, res) => {
                 return res.status(200).json({ message: "Password changed" });
             }
         } else {
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({ message: "Please make sure the token is valid" });
         }
     } catch (error) {
         console.log(error);
