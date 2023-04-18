@@ -17,6 +17,23 @@ connection.connect((err) => {
 }
 );
 
+// new thread for each query to check if the connection is still alive and reconnect if necessary
+connection.on('error', (err) => {
+    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+        console.log('MySQL connection lost');
+        connection.connect((err) => {
+            if (err) {
+                console.log(err);
+            } else {
+                console.log('Connected to MySQL');
+            }
+        });
+    } else {
+        throw err;
+    }
+});
+
+
 module.exports = connection;
 
 // user_information : contient les informations sur les utilisateurs.
