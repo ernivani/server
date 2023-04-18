@@ -20,10 +20,10 @@ CREATE EVENT delete_expired_tokens
 ON SCHEDULE EVERY 1 DAY
 DO
 BEGIN
-    -- Delete all rows where reset_password_token is not null and has expired
-    DELETE FROM user_information
+    DELETE FROM password_reset
     WHERE reset_password_token IS NOT NULL
-    AND TIMESTAMPDIFF(DAY, created_at, NOW()) >= 1;
+    AND TIMESTAMPDIFF(DAY, token_created_at, NOW()) >= 1;
+     
 END//
 
 DELIMITER ;
