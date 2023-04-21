@@ -154,12 +154,10 @@ const changePassword = async (req, res) => {
                     }
                 );
             });
-            return res
-                .status(200)
-                .json({
-                    message: "Password changed successfully",
-                    token: newToken.token,
-                });
+            return res.status(200).json({
+                message: "Password changed successfully",
+                token: newToken.token,
+            });
         } else {
             return res.status(404).json({ message: "User not found" });
         }
@@ -211,7 +209,7 @@ const resetPasswordSend = async (req, res) => {
 };
 
 const resetPassword = async (req, res) => {
-    const { token, password,password2 } = req.body;
+    const { token, password, password2 } = req.body;
     if (password !== password2) {
         return res.status(400).json({ message: "Passwords do not match" });
     }
@@ -229,10 +227,10 @@ const resetPassword = async (req, res) => {
         });
         if (results.length > 0) {
             const user = results[0];
-            console.log(user)
+            console.log(user);
             if (user.reset_password_token !== token) {
                 return res.status(401).json({ message: "Invalid token" });
-            }else {
+            } else {
                 await new Promise((resolve, reject) => {
                     query = `UPDATE user_information SET password = ? WHERE id = ?`;
                     connection.query(
@@ -247,7 +245,7 @@ const resetPassword = async (req, res) => {
                         }
                     );
                 });
-                console.log(user.id)
+                console.log(user.id);
                 await new Promise((resolve, reject) => {
                     query = `DELETE FROM password_reset WHERE user_information_id = ?`;
                     connection.query(
@@ -265,16 +263,15 @@ const resetPassword = async (req, res) => {
                 return res.status(200).json({ message: "Password changed" });
             }
         } else {
-            return res.status(404).json({ message: "Please make sure the token is valid" });
+            return res
+                .status(404)
+                .json({ message: "Please make sure the token is valid" });
         }
     } catch (error) {
         console.log(error);
         return res.status(500).json({ message: "Internal server error" });
     }
 };
-
-
-
 
 module.exports = {
     userLogin,

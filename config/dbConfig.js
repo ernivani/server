@@ -1,38 +1,36 @@
-const mysql = require('mysql2');
+const mysql = require("mysql2");
 
 const connection = mysql.createConnection({
-    host: 'localhost',
-    database: 'userdb',
-    user: 'root',
-    password: 'ernicani',
-    multipleStatements: true
+    host: "localhost",
+    database: "userdb",
+    user: "root",
+    password: "ernicani",
+    multipleStatements: true,
 });
 
 connection.connect((err) => {
     if (err) {
         console.log(err);
     } else {
-        console.log('Connected to MySQL');
+        console.log("Connected to MySQL");
     }
-}
-);
+});
 
 // new thread for each query to check if the connection is still alive and reconnect if necessary
-connection.on('error', (err) => {
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-        console.log('MySQL connection lost');
+connection.on("error", (err) => {
+    if (err.code === "PROTOCOL_CONNECTION_LOST") {
+        console.log("MySQL connection lost");
         connection.connect((err) => {
             if (err) {
                 console.log(err);
             } else {
-                console.log('Connected to MySQL');
+                console.log("Connected to MySQL");
             }
         });
     } else {
         throw err;
     }
 });
-
 
 module.exports = connection;
 

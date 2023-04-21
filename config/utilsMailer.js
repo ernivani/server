@@ -11,8 +11,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const sendPasswordResetEmail = async (email, resetToken) => {
-    const message = 
-`Hey there,
+    const message = `Hey there,
 
 It's the Impin team.
 We received a request to reset your password.
@@ -25,8 +24,7 @@ Have a nice day,
 The Impin team.
 `;
 
-
-const mailOptions = {
+    const mailOptions = {
         from: "Impin@impin.fr",
         to: email,
         subject: "Do not reply",
