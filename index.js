@@ -18,7 +18,12 @@ app.use(express.json(), cors(corsOptions));
 app.use("/user", user);
 
 app.get("/", (req, res) => {
-    res.json({ message: "Welcome to the API" }).status(200);
+    // afficher des graphiques sur les stats du serveur (nombre de serveurs, nombre d'utilisateurs, nombre de messages, etc...)
+    res.sendFile(__dirname + "/public/index.html");
+});
+
+app.get("/themes/impin/theme.css", (req, res) => {
+    res.sendFile(__dirname + "/themes/impin/theme.css");
 });
 
 const services = [
