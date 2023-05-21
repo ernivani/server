@@ -131,10 +131,6 @@ const changeToken = async (
     }
 };
 
-killToken(
-    "21",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIxLCJ0b2tlbklkIjoiMnpva2czNmN3amJ4NWh3NWNqNXVyIiwiaWF0IjoxNjgwNzE2NzU1LCJleHAiOjE2ODMzMDg3NTV9.W_9PIhKZapDMy8tvCBruMkWp0LQmt6_55zM5G-461zE"
-);
 
 module.exports = {
     createToken,

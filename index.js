@@ -7,91 +7,92 @@ const user = require("./Routes/userRoutes.js");
 const server = http.createServer(app);
 const jwt = require("jsonwebtoken");
 const socket = require("socket.io");
-const fs = require("fs");
+const {
+	add_user,
+	get_server_list,
+	create_server,
+	disconnect_user,
+	GetChannels,
+	getAllServer,
+	getAllUser,
+	GetMessages,
+	SendMessages,
+} = require("./socket/request.js");
 
 const corsOptions = {
-    origin: "*",
-    methods: ["GET", "POST"],
+	origin: "*",
+	methods: ["GET", "POST"],
 };
 
 app.use(express.json(), cors(corsOptions));
 app.use("/user", user);
 
+app.use((req, res, next) => {
+	const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+	if (ip !== "::1" && ip !== "91.170.53.249") {
+		return res.status(403).json({ error: "You are not allowed" });
+	}
+	next();
+});
 app.get("/", (req, res) => {
-    // afficher des graphiques sur les stats du serveur (nombre de serveurs, nombre d'utilisateurs, nombre de messages, etc...)
-    res.sendFile(__dirname + "/public/index.html");
+	res.sendFile(__dirname + "/public/index.html");
 });
 
-app.get("/themes/impin/theme.css", (req, res) => {
-    res.sendFile(__dirname + "/themes/impin/theme.css");
-});
-
-const services = [
-    { name: "Web", url: "https://impin.fr" },
-    { name: "API", url: "https://api.impin.fr" },
-];
-
-const https = require("https");
-app.get("/status", (req, res) => {
-    // Make an HTTPS request to each service and check the status code
-    const promises = services.map((service) => {
-        return new Promise((resolve) => {
-            https
-                .get(service.url, (response) => {
-                    const status = response.statusCode === 200 ? "OK" : "KO";
-                    resolve({ name: service.name, status });
-                })
-                .on("error", () => {
-                    resolve({ name: service.name, status: "KO" });
-                });
-        });
-    });
-
-    // Wait for all promises to resolve and return the results as JSON
-    Promise.all(promises).then((results) => {
-        res.json({ services: results });
-    });
+app.get("/stats", async (req, res) => {
+	try {
+		res.json({
+			Users: (await getAllUser()).length,
+			OnlineUsers: global.onlineUsers.size,
+			Servers: (await getAllServer()).length,
+		});
+	} catch (err) {
+		res.status(500).json({ error: err.message });
+	}
 });
 
 server.listen(port, () => {
-    console.log(`Server started on port ${port}`);
+	console.log(`Server started on port ${port}`);
 });
 
 global.io = socket(server, {
-    cors: {
-        origin: "*",
-        credentials: true,
-    },
+	cors: {
+		origin: "*",
+		credentials: true,
+	},
 });
 
 global.onlineUsers = new Map();
 
-const {
-    add_user,
-    get_server_list,
-    create_server,
-    disconnect_user,
-    get_channel_by_server,
-} = require("./socket/request.js");
-
 io.on("connection", (socket) => {
-    global.chatSocket = socket;
+	global.chatSocket = socket;
 
-    socket.on("add-user", (userId) => {
-        add_user(userId, socket.id);
-    });
-    socket.on("get-server-list", (userId) => {
-        get_server_list(userId);
-    });
-    socket.on("create-server", (params) => {
-        create_server(params);
-    });
+	socket.on("add-user", (userId) => {
+		add_user(userId, socket.id);
+	});
+	socket.on("get-server-list", (userId) => {
+		get_server_list(userId);
+	});
+	socket.on("create-server", (params) => {
+		create_server(params);
+	});
 
-    socket.on("get-channel-by-server", (paramss) => {
-        get_channel_by_server(paramss);
-    });
+	socket.on("GetChannels", (serverId) => {
+		GetChannels(serverId);
+	});
 
-    socket.on("disconnect", () => {
-        disconnect_user(socket.id);
-    });
+	socket.on("GetMessages", (srvParams) => {
+		GetMessages(srvParams);
+	});
+
+	socket.on("SendMessages", (params) => {
+		SendMessages(params);
+	});
+
+	socket.on("JoinChannel", (params) => {
+		console.log(socket.id + " joined " + params.channelId);
+	});
+
+	socket.on("disconnect", () => {
+		disconnect_user(socket.id);
+	});
 });
